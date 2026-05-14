@@ -1,0 +1,9 @@
+{
+  "name": "V-PULSE",
+  "description": "A high-energy, mobile-first social media experience for the neon generation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
