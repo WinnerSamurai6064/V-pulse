@@ -4,33 +4,45 @@ class VPulseRealtime {
   private socket: WebSocket | null = null;
   private listeners = new Map<string, Set<Listener>>();
   private reconnectTimer: number | null = null;
+  private reconnectEnabled = true;
 
   connect() {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) return;
+    if (this.socket?.readyState === WebSocket.OPEN) return;
+    if (this.socket?.readyState === WebSocket.CONNECTING) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.host;
 
     this.socket = new WebSocket(`${protocol}://${host}`);
 
     this.socket.onopen = () => {
-      this.emitLocal("socket:open", { connected: true });
+      this.emitLocal('socket:open', {
+        connected: true,
+      });
     };
 
     this.socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        this.emitLocal(data.type, data);
-        this.emitLocal("*", data);
+
+        if (data?.type) {
+          this.emitLocal(data.type, data);
+        }
+
+        this.emitLocal('*', data);
       } catch {
-        this.emitLocal("socket:error", {
-          message: "Invalid server message"
+        this.emitLocal('socket:error', {
+          message: 'Invalid server message',
         });
       }
     };
 
     this.socket.onclose = () => {
-      this.emitLocal("socket:close", { connected: false });
+      this.emitLocal('socket:close', {
+        connected: false,
+      });
+
+      if (!this.reconnectEnabled) return;
 
       if (this.reconnectTimer) {
         window.clearTimeout(this.reconnectTimer);
@@ -42,8 +54,8 @@ class VPulseRealtime {
     };
 
     this.socket.onerror = () => {
-      this.emitLocal("socket:error", {
-        message: "Realtime connection error"
+      this.emitLocal('socket:error', {
+        message: 'Realtime connection error',
       });
     };
   }
@@ -51,11 +63,11 @@ class VPulseRealtime {
   send(type: string, payload: Record<string, any> = {}) {
     const message = JSON.stringify({
       type,
-      ...payload
+      ...payload,
     });
 
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      console.warn("V-PULSE socket not connected yet");
+      console.warn('V-PULSE realtime socket is not connected yet.');
       return;
     }
 
@@ -67,11 +79,22 @@ class VPulseRealtime {
       this.listeners.set(type, new Set());
     }
 
-    this.listeners.get(type)!.add(listener);
+    this.listeners.get(type)?.add(listener);
 
     return () => {
       this.listeners.get(type)?.delete(listener);
     };
+  }
+
+  disconnect() {
+    this.reconnectEnabled = false;
+
+    if (this.reconnectTimer) {
+      window.clearTimeout(this.reconnectTimer);
+    }
+
+    this.socket?.close();
+    this.socket = null;
   }
 
   private emitLocal(type: string, data: any) {
